@@ -1083,6 +1083,22 @@ export default class VideoPlayer extends Component {
         return null;
     }
 
+    /**
+     * Show GIF icon
+     */
+    renderGIF() {
+        if ( this.props.showGIF ) {
+            return (
+                <View style={ styles.GIF.container }>
+                    <View style={{backgroundColor: 'rgba(0,0,0,0.8)', borderRadius: 50, padding: 20, opacity: 0.5}}>
+                      <Text style={{color: '#f2f2f2'}}>GIF</Text>
+                    </View>
+                </View>
+            );
+        }
+        return null;
+    }
+
     renderError() {
         if ( this.state.error ) {
             return (
@@ -1130,6 +1146,7 @@ export default class VideoPlayer extends Component {
                     { this.renderError() }
                     { this.renderTopControls() }
                     { this.renderLoader() }
+                    { this.renderGIF() }
                     { this.renderBottomControls() }
                 </View>
             </TouchableWithoutFeedback>
@@ -1179,6 +1196,17 @@ const styles = {
         },
     }),
     loader: StyleSheet.create({
+        container: {
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+    }),
+    GIF: StyleSheet.create({
         container: {
             position: 'absolute',
             top: 0,
