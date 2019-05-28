@@ -3,6 +3,7 @@ import Video from 'react-native-video';
 import {
     TouchableWithoutFeedback,
     TouchableHighlight,
+    TouchableOpacity,
     ImageBackground,
     PanResponder,
     StyleSheet,
@@ -15,39 +16,39 @@ import {
     Text
 } from 'react-native';
 import _ from 'lodash';
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 
 export default class VideoPlayer extends Component {
 
     static defaultProps = {
-        toggleResizeModeOnFullscreen:   true,
-        playInBackground:               false,
-        playWhenInactive:               false,
-        showOnStart:                    true,
-        resizeMode:                     'contain',
-        paused:                         false,
-        repeat:                         false,
-        volume:                         1,
-        muted:                          false,
-        title:                          '',
-        rate:                           1,
+        toggleResizeModeOnFullscreen: true,
+        playInBackground: false,
+        playWhenInactive: false,
+        showOnStart: true,
+        resizeMode: 'contain',
+        paused: false,
+        repeat: false,
+        volume: 1,
+        muted: false,
+        title: '',
+        rate: 1,
     };
 
-    constructor( props ) {
-        super( props );
+
+    constructor(props) {
+        super(props);
 
         /**
          * All of our values that are updated by the
          * methods and listeners in this class
          */
-        this.state = {
+        this._initialState = {
             // Video
             resizeMode: this.props.resizeMode,
             paused: this.props.paused,
             muted: this.props.muted,
             volume: this.props.volume,
             rate: this.props.rate,
-            // Controls
-
             isFullscreen: this.props.resizeMode === 'cover' || false,
             showTimeRemaining: true,
             volumeTrackWidth: 0,
@@ -64,11 +65,15 @@ export default class VideoPlayer extends Component {
             currentTime: 0,
             error: false,
             duration: 0,
+            // onEndPlay: false,
         };
-
+        this.state = this._initialState;
         /**
          * Any options that can be set at init.
          */
+        this.onEndPlay = false;
+        this.showedIcon = false;
+        this.count = 0;
         this.opts = {
             playWhenInactive: this.props.playWhenInactive,
             playInBackground: this.props.playInBackground,
@@ -80,27 +85,28 @@ export default class VideoPlayer extends Component {
          * Our app listeners and associated methods
          */
         this.events = {
-            onError: this.props.onError || this._onError.bind( this ),
-            onBack: this.props.onBack || this._onBack.bind( this ),
-            onEnd: this.props.onEnd || this._onEnd.bind( this ),
-            onScreenTouch: this._onScreenTouch.bind( this ),
+            onError: this.props.onError || this._onError.bind(this),
+            onBack: this.props.onBack || this._onBack.bind(this),
+            onEnd: this.props.onEnd || this._onEnd.bind(this),
+            onScreenTouch: this._onScreenTouch.bind(this),
             onEnterFullscreen: this.props.onEnterFullscreen,
             onExitFullscreen: this.props.onExitFullscreen,
-            onLoadStart: this._onLoadStart.bind( this ),
-            onProgress: this._onProgress.bind( this ),
-            onLoad: this._onLoad.bind( this ),
+            onLoadStart: this._onLoadStart.bind(this),
+            onProgress: this._onProgress.bind(this),
+            onLoad: this._onLoad.bind(this),
             onPause: this.props.onPause,
             onPlay: this.props.onPlay,
+            onBuffer: this._bufferHandler.bind(this)
         };
 
         /**
          * Functions used throughout the application
          */
         this.methods = {
-            toggleFullscreen: this._toggleFullscreen.bind( this ),
-            togglePlayPause: this._togglePlayPause.bind( this ),
-            toggleControls: this._toggleControls.bind( this ),
-            toggleTimer: this._toggleTimer.bind( this ),
+            toggleFullscreen: this._toggleFullscreen.bind(this),
+            togglePlayPause: this._togglePlayPause.bind(this),
+            toggleControls: this._toggleControls.bind(this),
+            toggleTimer: this._toggleTimer.bind(this),
         };
 
         /**
@@ -124,18 +130,18 @@ export default class VideoPlayer extends Component {
 
         this.animations = {
             bottomControl: {
-                marginBottom: new Animated.Value( 0 ),
-                opacity: new Animated.Value( initialValue ),
+                marginBottom: new Animated.Value(0),
+                opacity: new Animated.Value(initialValue),
             },
             topControl: {
-                marginTop: new Animated.Value( 0 ),
-                opacity: new Animated.Value( initialValue ),
+                marginTop: new Animated.Value(0),
+                opacity: new Animated.Value(initialValue),
             },
             video: {
-                opacity: new Animated.Value( 1 ),
+                opacity: new Animated.Value(1),
             },
             loader: {
-                rotate: new Animated.Value( 0 ),
+                rotate: new Animated.Value(0),
                 MAX_VALUE: 360,
             }
         };
@@ -167,12 +173,13 @@ export default class VideoPlayer extends Component {
      * and show the controls.
      */
     _onLoadStart() {
+
         let state = this.state;
         state.loading = true;
         this.loadAnimation();
-        this.setState( state );
+        this.setState(state);
 
-        if ( typeof this.props.onLoadStart === 'function' ) {
+        if (typeof this.props.onLoadStart === 'function') {
             this.props.onLoadStart(...arguments);
         }
     }
@@ -184,18 +191,19 @@ export default class VideoPlayer extends Component {
      *
      * @param {object} data The video meta data
      */
-    _onLoad( data = {} ) {
-        let state = this.state;
+    _onLoad(data = {}) {
 
+        // let state;
+        let state = this.state;
         state.duration = data.duration;
         state.loading = false;
-        this.setState( state );
+        this.setState(state);
 
-        if ( state.showControls ) {
+        if (state.showControls) {
             this.setControlTimeout();
         }
 
-        if ( typeof this.props.onLoad === 'function' ) {
+        if (typeof this.props.onLoad === 'function') {
             this.props.onLoad(...arguments);
         }
     }
@@ -206,20 +214,20 @@ export default class VideoPlayer extends Component {
      *
      * @param {object} data The video meta data
      */
-    _onProgress( data = {} ) {
+    _onProgress(data = {}) {
         let state = this.state;
         state.currentTime = data.currentTime;
 
-        if ( ! state.seeking ) {
+        if (!state.seeking) {
             const position = this.calculateSeekerPosition();
-            this.setSeekerPosition( position );
+            this.setSeekerPosition(position);
         }
 
-        if ( typeof this.props.onProgress === 'function' ) {
+        if (typeof this.props.onProgress === 'function') {
             this.props.onProgress(...arguments);
         }
 
-        this.setState( state );
+        this.setState(state);
     }
 
     /**
@@ -228,7 +236,16 @@ export default class VideoPlayer extends Component {
      * Either close the video or go to a
      * new page.
      */
-    _onEnd() {}
+    _onEnd() {
+        this.setState({ paused: true }, () => {
+            this.loopVideo();
+        });
+    }
+
+    loopVideo() {
+        this.player && this.player.ref.seek(0);
+        this.props.isGIF ? this.setState({ paused: false }) : null;
+    }
 
     /**
      * Set the error state to true which then
@@ -236,12 +253,12 @@ export default class VideoPlayer extends Component {
      *
      * @param {object} err  Err obj returned from <Video> component
      */
-    _onError( err ) {
+    _onError(err) {
         let state = this.state;
         state.error = true;
         state.loading = false;
 
-        this.setState( state );
+        this.setState(state);
     }
 
     /**
@@ -251,21 +268,29 @@ export default class VideoPlayer extends Component {
      * fullscreen mode.
      */
     _onScreenTouch() {
+        // console.log("came herer scrennen")
+        this.player.seekPanResponder.panHandlers
         let state = this.state;
         const time = new Date().getTime();
-        const delta =  time - state.lastScreenPress;
+        const delta = time - state.lastScreenPress;
 
-        if ( delta < 300 ) {
+        if (delta < 300) {
             this.methods.toggleFullscreen();
         }
 
         this.methods.toggleControls();
         state.lastScreenPress = time;
-
-        this.setState( state );
+        this.setState(state);
     }
 
-
+    _bufferHandler(meta) {
+        let state = this.state;
+        let bufferState = meta.isBuffering;
+        let pauseState = this.state.paused;
+        state.loading = bufferState && !pauseState;
+        bufferState && !pauseState && this.loadAnimation();
+        this.setState(state);
+    }
 
     /**
     | -------------------------------------------------------
@@ -285,16 +310,16 @@ export default class VideoPlayer extends Component {
      * Default is 15s
      */
     setControlTimeout() {
-        this.player.controlTimeout = setTimeout( ()=> {
+        this.player.controlTimeout = setTimeout(() => {
             this._hideControls();
-        }, this.player.controlTimeoutDelay );
+        }, this.player.controlTimeoutDelay);
     }
 
     /**
      * Clear the hide controls timeout.
      */
     clearControlTimeout() {
-        clearTimeout( this.player.controlTimeout );
+        clearTimeout(this.player.controlTimeout);
     }
 
     /**
@@ -361,7 +386,7 @@ export default class VideoPlayer extends Component {
      * Loop animation to spin loader icon. If not loading then stop loop.
      */
     loadAnimation() {
-        if ( this.state.loading ) {
+        if (this.state.loading) {
             Animated.sequence([
                 Animated.timing(
                     this.animations.loader.rotate,
@@ -379,7 +404,7 @@ export default class VideoPlayer extends Component {
                         easing: Easing.linear,
                     }
                 ),
-            ]).start( this.loadAnimation.bind( this ) );
+            ]).start(this.loadAnimation.bind(this));
         }
     }
 
@@ -388,12 +413,12 @@ export default class VideoPlayer extends Component {
      * state then calls the animation.
      */
     _hideControls() {
-        if(this.mounted) {
+        if (this.mounted) {
             let state = this.state;
             state.showControls = false;
             this.hideControlAnimation();
 
-            this.setState( state );
+            this.setState(state);
         }
     }
 
@@ -403,9 +428,9 @@ export default class VideoPlayer extends Component {
      */
     _toggleControls() {
         let state = this.state;
-        state.showControls = ! state.showControls;
+        state.showControls = !state.showControls;
 
-        if ( state.showControls ) {
+        if (state.showControls) {
             this.showControlAnimation();
             this.setControlTimeout();
         }
@@ -414,7 +439,7 @@ export default class VideoPlayer extends Component {
             this.clearControlTimeout();
         }
 
-        this.setState( state );
+        this.setState(state);
     }
 
     /**
@@ -425,7 +450,7 @@ export default class VideoPlayer extends Component {
     _toggleFullscreen() {
         let state = this.state;
 
-        state.isFullscreen = ! state.isFullscreen;
+        state.isFullscreen = !state.isFullscreen;
 
         if (this.props.toggleResizeModeOnFullscreen) {
             state.resizeMode = state.isFullscreen === true ? 'cover' : 'contain';
@@ -438,13 +463,14 @@ export default class VideoPlayer extends Component {
             typeof this.events.onExitFullscreen === 'function' && this.events.onExitFullscreen();
         }
 
-        this.setState( state );
+        this.setState(state);
     }
 
     /**
      * Toggle playing state on <Video> component
      */
     _togglePlayPause() {
+        // console.log('toggleplaypause')
         let state = this.state;
         state.paused = !state.paused;
 
@@ -455,7 +481,7 @@ export default class VideoPlayer extends Component {
             typeof this.events.onPlay === 'function' && this.events.onPlay();
         }
 
-        this.setState( state );
+        this.setState(state);
     }
 
     /**
@@ -464,8 +490,8 @@ export default class VideoPlayer extends Component {
      */
     _toggleTimer() {
         let state = this.state;
-        state.showTimeRemaining = ! state.showTimeRemaining;
-        this.setState( state );
+        state.showTimeRemaining = !state.showTimeRemaining;
+        this.setState(state);
     }
 
     /**
@@ -474,11 +500,11 @@ export default class VideoPlayer extends Component {
      * navigator prop by default.
      */
     _onBack() {
-        if ( this.props.navigator && this.props.navigator.pop ) {
+        if (this.props.navigator && this.props.navigator.pop) {
             this.props.navigator.pop();
         }
         else {
-            console.warn( 'Warning: _onBack requires navigator property to function. Either modify the onBack prop or pass a navigator prop' );
+            console.warn('Warning: _onBack requires navigator property to function. Either modify the onBack prop or pass a navigator prop');
         }
     }
 
@@ -488,12 +514,12 @@ export default class VideoPlayer extends Component {
      * or duration. Formatted to look as 00:00.
      */
     calculateTime() {
-        if ( this.state.showTimeRemaining ) {
+        if (this.state.showTimeRemaining) {
             const time = this.state.duration - this.state.currentTime;
-            return `-${ this.formatTime( time ) }`;
+            return `-${this.formatTime(time)}`;
         }
 
-        return this.formatTime( this.state.currentTime );
+        return this.formatTime(this.state.currentTime);
     }
 
     /**
@@ -502,17 +528,17 @@ export default class VideoPlayer extends Component {
      * @param {int} time time in milliseconds
      * @return {string} formatted time string in mm:ss format
      */
-    formatTime( time = 0 ) {
+    formatTime(time = 0) {
         const symbol = this.state.showRemainingTime ? '-' : '';
         time = Math.min(
-            Math.max( time, 0 ),
+            Math.max(time, 0),
             this.state.duration
         );
 
-        const formattedMinutes = _.padStart( Math.floor( time / 60 ).toFixed( 0 ), 2, 0 );
-        const formattedSeconds = _.padStart( Math.floor( time % 60 ).toFixed( 0 ), 2 , 0 );
+        const formattedMinutes = _.padStart(Math.floor(time / 60).toFixed(0), 2, 0);
+        const formattedSeconds = _.padStart(Math.floor(time % 60).toFixed(0), 2, 0);
 
-        return `${ symbol }${ formattedMinutes }:${ formattedSeconds }`;
+        return `${symbol}${formattedMinutes}:${formattedSeconds}`;
     }
 
     /**
@@ -522,18 +548,18 @@ export default class VideoPlayer extends Component {
      *
      * @param {float} position position in px of seeker handle}
      */
-    setSeekerPosition( position = 0 ) {
+    setSeekerPosition(position = 0) {
         let state = this.state;
-        position = this.constrainToSeekerMinMax( position );
+        position = this.constrainToSeekerMinMax(position);
 
         state.seekerFillWidth = position;
         state.seekerPosition = position;
 
-        if ( ! state.seeking ) {
+        if (!state.seeking) {
             state.seekerOffset = position
         };
 
-        this.setState( state );
+        this.setState(state);
     }
 
     /**
@@ -544,11 +570,11 @@ export default class VideoPlayer extends Component {
      * @param {float} val position of seeker handle in px
      * @return {float} contrained position of seeker handle in px
      */
-    constrainToSeekerMinMax( val = 0 ) {
-        if ( val <= 0 ) {
+    constrainToSeekerMinMax(val = 0) {
+        if (val <= 0) {
             return 0;
         }
-        else if ( val >= this.player.seekerWidth ) {
+        else if (val >= this.player.seekerWidth) {
             return this.player.seekerWidth;
         }
         return val;
@@ -561,6 +587,7 @@ export default class VideoPlayer extends Component {
      * @return {float} position of seeker handle in px based on currentTime
      */
     calculateSeekerPosition() {
+
         const percent = this.state.currentTime / this.state.duration;
         return this.player.seekerWidth * percent;
     }
@@ -581,11 +608,11 @@ export default class VideoPlayer extends Component {
      *
      * @param {float} time time to seek to in ms
      */
-    seekTo( time = 0 ) {
+    seekTo(time = 0) {
         let state = this.state;
         state.currentTime = time;
-        this.player.ref.seek( time );
-        this.setState( state );
+        this.player.ref.seek(time);
+        this.setState(state);
     }
 
     /**
@@ -593,23 +620,23 @@ export default class VideoPlayer extends Component {
      *
      * @param {float} position position of the volume handle in px
      */
-    setVolumePosition( position = 0 ) {
+    setVolumePosition(position = 0) {
         let state = this.state;
-        position = this.constrainToVolumeMinMax( position );
+        position = this.constrainToVolumeMinMax(position);
         state.volumePosition = position + this.player.iconOffset;
         state.volumeFillWidth = position;
 
         state.volumeTrackWidth = this.player.volumeWidth - state.volumeFillWidth;
 
-        if ( state.volumeFillWidth < 0 ) {
+        if (state.volumeFillWidth < 0) {
             state.volumeFillWidth = 0;
         }
 
-        if ( state.volumeTrackWidth > 150 ) {
+        if (state.volumeTrackWidth > 150) {
             state.volumeTrackWidth = 150;
         }
 
-        this.setState( state );
+        this.setState(state);
     }
 
     /**
@@ -619,11 +646,11 @@ export default class VideoPlayer extends Component {
      * @param {float} val position of the volume handle in px
      * @return {float} contrained position of the volume handle in px
      */
-    constrainToVolumeMinMax( val = 0 ) {
-        if ( val <= 0 ) {
+    constrainToVolumeMinMax(val = 0) {
+        if (val <= 0) {
             return 0;
         }
-        else if ( val >= this.player.volumeWidth + 9 ) {
+        else if (val >= this.player.volumeWidth + 9) {
             return this.player.volumeWidth + 9;
         }
         return val;
@@ -676,7 +703,7 @@ export default class VideoPlayer extends Component {
      * we have to handle possible props changes to state changes
      */
     componentWillReceiveProps(nextProps) {
-        if (this.state.paused !== nextProps.paused ) {
+        if (this.state.paused !== nextProps.paused) {
             this.setState({
                 paused: nextProps.paused
             })
@@ -690,11 +717,11 @@ export default class VideoPlayer extends Component {
     componentDidMount() {
         const position = this.calculateVolumePositionFromVolume();
         let state = this.state;
-        this.setVolumePosition( position );
+        this.setVolumePosition(position);
         state.volumeOffset = position;
         this.mounted = true;
 
-        this.setState( state );
+        this.setState(state);
     }
 
     /**
@@ -712,28 +739,41 @@ export default class VideoPlayer extends Component {
     initSeekPanResponder() {
         this.player.seekPanResponder = PanResponder.create({
 
+            onMoveShouldSetResponderCapture: () => {
+                // console.log("EOPEWPOEW")
+            },
+            onMoveShouldSetPanResponder: (evt, gestureState) => {
+                // console.log("hey good");
+            },
+            onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
+                // console.log(" pan panclicked here")
+                return gestureState.dx != 0 && gestureState.dy != 0;
+            },
+
             // Ask to be the responder.
-            onStartShouldSetPanResponder: ( evt, gestureState ) => true,
-            onMoveShouldSetPanResponder: ( evt, gestureState ) => true,
+            onStartShouldSetPanResponder: (evt, gestureState) => true,
+            // onMoveShouldSetPanResponder: (evt, gestureState) => true,
 
             /**
              * When we start the pan tell the machine that we're
              * seeking. This stops it from updating the seekbar
              * position in the onProgress listener.
              */
-            onPanResponderGrant: ( evt, gestureState ) => {
+            onPanResponderGrant: (evt, gestureState) => {
+                // console.log(" evt incommig postion of pan responder", gestureState)
                 let state = this.state;
                 this.clearControlTimeout();
                 state.seeking = true;
-                this.setState( state );
+                this.setState(state);
             },
 
             /**
              * When panning, update the seekbar position, duh.
              */
-            onPanResponderMove: ( evt, gestureState ) => {
+            onPanResponderMove: (evt, gestureState) => {
+                // console.log("incommig postion of pan responder", gestureState)
                 const position = this.state.seekerOffset + gestureState.dx;
-                this.setSeekerPosition( position );
+                this.setSeekerPosition(position);
             },
 
             /**
@@ -741,18 +781,18 @@ export default class VideoPlayer extends Component {
              * If you seek to the end of the video we fire the
              * onEnd callback
              */
-            onPanResponderRelease: ( evt, gestureState ) => {
+            onPanResponderRelease: (evt, gestureState) => {
                 const time = this.calculateTimeFromSeekerPosition();
                 let state = this.state;
-                if ( time >= state.duration && ! state.loading ) {
+                if (time >= state.duration && !state.loading) {
                     state.paused = true;
                     this.events.onEnd();
                 } else {
-                    this.seekTo( time );
+                    this.seekTo(time);
                     this.setControlTimeout();
                     state.seeking = false;
                 }
-                this.setState( state );
+                this.setState(state);
             }
         });
     }
@@ -762,9 +802,9 @@ export default class VideoPlayer extends Component {
      */
     initVolumePanResponder() {
         this.player.volumePanResponder = PanResponder.create({
-            onStartShouldSetPanResponder: ( evt, gestureState ) => true,
-            onMoveShouldSetPanResponder: ( evt, gestureState ) => true,
-            onPanResponderGrant: ( evt, gestureState ) => {
+            onStartShouldSetPanResponder: (evt, gestureState) => true,
+            onMoveShouldSetPanResponder: (evt, gestureState) => true,
+            onPanResponderGrant: (evt, gestureState) => {
                 this.clearControlTimeout();
             },
 
@@ -773,31 +813,31 @@ export default class VideoPlayer extends Component {
              * If we go to 0 then turn on the mute prop
              * to avoid that weird static-y sound.
              */
-            onPanResponderMove: ( evt, gestureState ) => {
+            onPanResponderMove: (evt, gestureState) => {
                 let state = this.state;
                 const position = this.state.volumeOffset + gestureState.dx;
 
-                this.setVolumePosition( position );
+                this.setVolumePosition(position);
                 state.volume = this.calculateVolumeFromVolumePosition();
 
-                if ( state.volume <= 0 ) {
+                if (state.volume <= 0) {
                     state.muted = true;
                 }
                 else {
                     state.muted = false;
                 }
 
-                this.setState( state );
+                this.setState(state);
             },
 
             /**
              * Update the offset...
              */
-            onPanResponderRelease: ( evt, gestureState ) => {
+            onPanResponderRelease: (evt, gestureState) => {
                 let state = this.state;
                 state.volumeOffset = state.volumePosition;
                 this.setControlTimeout();
-                this.setState( state );
+                this.setState(state);
             }
         });
     }
@@ -821,12 +861,12 @@ export default class VideoPlayer extends Component {
      * consistent <TouchableHighlight>
      * wrapper and styling.
      */
-    renderControl( children, callback, style = {} ) {
+    renderControl(children, callback, style = {}) {
         return (
             <TouchableHighlight
                 underlayColor="transparent"
-                activeOpacity={ 0.3 }
-                onPress={()=>{
+                activeOpacity={0.3}
+                onPress={() => {
                     this.resetControlTimeout();
                     callback();
                 }}
@@ -835,7 +875,7 @@ export default class VideoPlayer extends Component {
                     style
                 ]}
             >
-                { children }
+                {children}
             </TouchableHighlight>
         );
     }
@@ -845,7 +885,7 @@ export default class VideoPlayer extends Component {
      */
     renderNullControl() {
         return (
-            <View style={[ styles.controls.control ]} />
+            <View style={[styles.controls.control]} />
         );
     }
 
@@ -859,7 +899,7 @@ export default class VideoPlayer extends Component {
         const volumeControl = this.props.disableVolume ? this.renderNullControl() : this.renderVolume();
         const fullscreenControl = this.props.disableFullscreen ? this.renderNullControl() : this.renderFullscreen();
 
-        return(
+        return (
             <Animated.View style={[
                 styles.controls.top,
                 {
@@ -868,14 +908,14 @@ export default class VideoPlayer extends Component {
                 }
             ]}>
                 <ImageBackground
-                    source={ require( './assets/img/top-vignette.png' ) }
-                    style={[ styles.controls.column ]}
-                    imageStyle={[ styles.controls.vignette ]}>
-                    <View style={ styles.controls.topControlGroup }>
-                        { backControl }
-                        <View style={ styles.controls.pullRight }>
-                            { volumeControl }
-                            { fullscreenControl }
+                    source={require('./assets/img/top-vignette.png')}
+                    style={[styles.controls.column]}
+                    imageStyle={[styles.controls.vignette]}>
+                    <View style={styles.controls.topControlGroup}>
+                        {backControl}
+                        <View style={styles.controls.pullRight}>
+                            {volumeControl}
+                            {fullscreenControl}
                         </View>
                     </View>
                 </ImageBackground>
@@ -890,8 +930,8 @@ export default class VideoPlayer extends Component {
 
         return this.renderControl(
             <Image
-                source={ require( './assets/img/back.png' ) }
-                style={ styles.controls.back }
+                source={require('./assets/img/back.png')}
+                style={styles.controls.back}
             />,
             this.events.onBack,
             styles.controls.back
@@ -904,23 +944,23 @@ export default class VideoPlayer extends Component {
     renderVolume() {
 
         return (
-            <View style={ styles.volume.container }>
+            <View style={styles.volume.container}>
                 <View style={[
                     styles.volume.fill,
                     { width: this.state.volumeFillWidth }
-                ]}/>
+                ]} />
                 <View style={[
                     styles.volume.track,
                     { width: this.state.volumeTrackWidth }
-                ]}/>
+                ]} />
                 <View
                     style={[
                         styles.volume.handle,
                         { left: this.state.volumePosition }
                     ]}
-                    { ...this.player.volumePanResponder.panHandlers }
+                    {...this.player.volumePanResponder.panHandlers}
                 >
-                    <Image style={ styles.volume.icon } source={ require( './assets/img/volume.png' ) } />
+                    <Image style={styles.volume.icon} source={require('./assets/img/volume.png')} />
                 </View>
             </View>
         );
@@ -931,9 +971,9 @@ export default class VideoPlayer extends Component {
      */
     renderFullscreen() {
 
-        let source = this.state.isFullscreen === true ? require( './assets/img/shrink.png' ) : require( './assets/img/expand.png' );
+        let source = this.state.isFullscreen === true ? require('./assets/img/shrink.png') : require('./assets/img/expand.png');
         return this.renderControl(
-            <Image source={ source } />,
+            <Image source={source} />,
             this.methods.toggleFullscreen,
             styles.controls.fullscreen
         );
@@ -948,7 +988,7 @@ export default class VideoPlayer extends Component {
         const seekbarControl = this.props.disableSeekbar ? this.renderNullControl() : this.renderSeekbar();
         const playPauseControl = this.props.disablePlayPause ? this.renderNullControl() : this.renderPlayPause();
 
-        return(
+        return (
             <Animated.View style={[
                 styles.controls.bottom,
                 {
@@ -957,17 +997,17 @@ export default class VideoPlayer extends Component {
                 }
             ]}>
                 <ImageBackground
-                    source={ require( './assets/img/bottom-vignette.png' ) }
-                    style={[ styles.controls.column ]}
-                    imageStyle={[ styles.controls.vignette ]}>
-                    { seekbarControl }
+                    source={require('./assets/img/bottom-vignette.png')}
+                    style={[styles.controls.column]}
+                    imageStyle={[styles.controls.vignette]}>
+                    {seekbarControl}
                     <View style={[
                         styles.controls.row,
                         styles.controls.bottomControlGroup
                     ]}>
-                        { playPauseControl }
-                        { this.renderTitle() }
-                        { timerControl }
+                        {playPauseControl}
+                        {this.renderTitle()}
+                        {timerControl}
 
                     </View>
                 </ImageBackground>
@@ -979,12 +1019,21 @@ export default class VideoPlayer extends Component {
      * Render the seekbar and attach its handlers
      */
     renderSeekbar() {
-
         return (
-            <View style={ styles.seekbar.container }>
+            // <TouchableOpacity
+            //     onPress={() => {
+            //         console.log("clicked in pan pan pan")
+            //     }}
+            //     {...this.player.seekPanResponder.panHandlers}
+            // >
+            <View style={styles.seekbar.container}
+                // onPress={() => {
+                //     console.log("clicked in pan pan pan")
+                // }}
+                {...this.player.seekPanResponder.panHandlers} >
                 <View
-                    style={ styles.seekbar.track }
-                    onLayout={ event => this.player.seekerWidth = event.nativeEvent.layout.width }
+                    style={styles.seekbar.track}
+                    onLayout={event => this.player.seekerWidth = event.nativeEvent.layout.width}
                 >
                     <View style={[
                         styles.seekbar.fill,
@@ -992,21 +1041,22 @@ export default class VideoPlayer extends Component {
                             width: this.state.seekerFillWidth,
                             backgroundColor: this.props.seekColor || '#FFF'
                         }
-                    ]}/>
+                    ]} />
                 </View>
-                <View
+                <TouchableOpacity
                     style={[
                         styles.seekbar.handle,
                         { left: this.state.seekerPosition }
                     ]}
-                    { ...this.player.seekPanResponder.panHandlers }
                 >
                     <View style={[
                         styles.seekbar.circle,
-                        { backgroundColor: this.props.seekColor || '#FFF' } ]}
+                        { backgroundColor: this.props.seekColor || '#FFF' }]}
                     />
-                </View>
+                </TouchableOpacity>
+
             </View>
+            // {/* </TouchableOpacity> */ }
         );
     }
 
@@ -1014,21 +1064,31 @@ export default class VideoPlayer extends Component {
      * Render the play/pause button and show the respective icon
      */
     renderPlayPause() {
-
-        let source = this.state.paused === true ? require( './assets/img/play.png' ) : require( './assets/img/pause.png' );
+        let source = this.state.paused ? require('./assets/img/play.png') : require('./assets/img/pause.png');
         return this.renderControl(
-            <Image source={ source } />,
+            <Image source={source} />,
             this.methods.togglePlayPause,
             styles.controls.playPause
         );
     }
 
     /**
+     * Render the custom play/pause button and show the respective icon for GIF/Video
+     */
+    renderCustomPlayPauseButton() {
+        let icon = this.props.isGIF ? "gif" : "play-circle-filled";
+        return this.renderControl(
+            <MaterialIcons name={icon} color="white" size={70} />,
+            this.methods.togglePlayPause,
+            styles.customControls.playPauseIcon
+        );
+    }
+    /**
      * Render our title...if supplied.
      */
     renderTitle() {
 
-        if ( this.opts.title ) {
+        if (this.opts.title) {
             return (
                 <View style={[
                     styles.controls.control,
@@ -1037,8 +1097,8 @@ export default class VideoPlayer extends Component {
                     <Text style={[
                         styles.controls.text,
                         styles.controls.titleText
-                    ]} numberOfLines={ 1 }>
-                        { this.opts.title || '' }
+                    ]} numberOfLines={1}>
+                        {this.opts.title || ''}
                     </Text>
                 </View>
             );
@@ -1053,8 +1113,8 @@ export default class VideoPlayer extends Component {
     renderTimer() {
 
         return this.renderControl(
-            <Text style={ styles.controls.timerText }>
-                { this.calculateTime() }
+            <Text style={styles.controls.timerText}>
+                {this.calculateTime()}
             </Text>,
             this.methods.toggleTimer,
             styles.controls.timer
@@ -1065,17 +1125,21 @@ export default class VideoPlayer extends Component {
      * Show loading icon
      */
     renderLoader() {
-        if ( this.state.loading ) {
+        if (this.state.loading) {
             return (
-                <View style={ styles.loader.container }>
-                    <Animated.Image source={ require( './assets/img/loader-icon.png' ) } style={[
+                <View style={styles.loader.container}>
+                    <Animated.Image source={require('./assets/img/loader-icon.png')} style={[
                         styles.loader.icon,
-                        { transform: [
-                            { rotate: this.animations.loader.rotate.interpolate({
-                                inputRange: [ 0, 360 ],
-                                outputRange: [ '0deg', '360deg' ]
-                            })}
-                        ]}
+                        {
+                            transform: [
+                                {
+                                    rotate: this.animations.loader.rotate.interpolate({
+                                        inputRange: [0, 360],
+                                        outputRange: ['0deg', '360deg']
+                                    })
+                                }
+                            ]
+                        }
                     ]} />
                 </View>
             );
@@ -1084,27 +1148,23 @@ export default class VideoPlayer extends Component {
     }
 
     /**
-     * Show GIF icon
+     * Render Body Controls
      */
-    renderGIF() {
-        if ( this.props.showGIF ) {
-            return (
-                <View style={ styles.GIF.container }>
-                    <View style={{backgroundColor: 'rgba(0,0,0,0.8)', borderRadius: 50, padding: 20, opacity: 0.5}}>
-                      <Text style={{color: '#f2f2f2'}}>GIF</Text>
-                    </View>
-                </View>
-            );
-        }
-        return null;
+    renderBodyControls() {
+        const customplayPauseControl = !this.state.paused ? this.renderNullControl() : this.renderCustomPlayPauseButton();
+        return (
+            <View style={styles.controls.bodyControlGroup}>
+                {customplayPauseControl}
+            </View>
+        );
     }
 
     renderError() {
-        if ( this.state.error ) {
+        if (this.state.error) {
             return (
-                <View style={ styles.error.container }>
-                    <Image source={ require( './assets/img/error-icon.png' ) } style={ styles.error.icon } />
-                    <Text style={ styles.error.text }>
+                <View style={styles.error.container}>
+                    <Image source={require('./assets/img/error-icon.png')} style={styles.error.icon} />
+                    <Text style={styles.error.text}>
                         Video unavailable
                     </Text>
                 </View>
@@ -1119,35 +1179,35 @@ export default class VideoPlayer extends Component {
     render() {
         return (
             <TouchableWithoutFeedback
-                onPress={ this.events.onScreenTouch }
-                style={[ styles.player.container, this.styles.containerStyle ]}
+                onPress={this.events.onScreenTouch}
+                style={[styles.player.container, this.styles.containerStyle]}
             >
-                <View style={[ styles.player.container, this.styles.containerStyle ]}>
+                <View style={[styles.player.container, this.styles.containerStyle]}>
                     <Video
-                        { ...this.props }
-                        ref={ videoPlayer => this.player.ref = videoPlayer }
+                        {...this.props}
+                        ref={videoPlayer => this.player.ref = videoPlayer}
 
-                        resizeMode={ this.state.resizeMode }
-                        volume={ this.state.volume }
-                        paused={ this.state.paused }
-                        muted={ this.state.muted }
-                        rate={ this.state.rate }
+                        resizeMode={this.state.resizeMode}
+                        volume={this.state.volume}
+                        paused={this.state.paused}
+                        muted={this.state.muted}
+                        rate={this.state.rate}
+                        repeat={false}
+                        onLoadStart={this.events.onLoadStart}
+                        onProgress={this.events.onProgress}
+                        onError={this.events.onError}
+                        onLoad={this.events.onLoad}
+                        onEnd={this.events.onEnd}
+                        onBuffer={this.events.onBuffer}
+                        style={[styles.player.video, this.styles.videoStyle]}
 
-                        onLoadStart={ this.events.onLoadStart }
-                        onProgress={ this.events.onProgress }
-                        onError={ this.events.onError }
-                        onLoad={ this.events.onLoad }
-                        onEnd={ this.events.onEnd }
-
-                        style={[ styles.player.video, this.styles.videoStyle ]}
-
-                        source={ this.props.source }
+                        source={this.props.source}
                     />
-                    { this.renderError() }
-                    { this.renderTopControls() }
-                    { this.renderLoader() }
-                    { this.renderGIF() }
-                    { this.renderBottomControls() }
+                    {this.renderError()}
+                    {this.renderTopControls()}
+                    {this.renderLoader()}
+                    {this.renderBodyControls()}
+                    {this.renderBottomControls()}
                 </View>
             </TouchableWithoutFeedback>
         );
@@ -1206,15 +1266,9 @@ const styles = {
             justifyContent: 'center',
         },
     }),
-    GIF: StyleSheet.create({
-        container: {
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            alignItems: 'center',
-            justifyContent: 'center',
+    customControls: StyleSheet.create({
+        playPauseIcon: {
+            zIndex: 1
         },
     }),
     controls: StyleSheet.create({
@@ -1267,6 +1321,15 @@ const styles = {
             width: null,
             margin: 12,
             marginBottom: 18,
+        },
+        bodyControlGroup: {
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
         },
         bottomControlGroup: {
             alignSelf: 'stretch',
@@ -1332,38 +1395,38 @@ const styles = {
             padding: 16,
         },
         icon: {
-            marginLeft:7
+            marginLeft: 7
         }
     }),
     seekbar: StyleSheet.create({
         container: {
             alignSelf: 'stretch',
-            height: 28,
+            height: 48,
             marginLeft: 20,
-            marginRight: 20
+            marginRight: 20,
         },
         track: {
-            backgroundColor: '#333',
-            height: 1,
+            backgroundColor: '#fff',
+            height: 2,
             position: 'relative',
-            top: 14,
+            top: 24,
             width: '100%'
         },
         fill: {
             backgroundColor: '#FFF',
-            height: 1,
+            height: 3,
             width: '100%'
         },
         handle: {
             position: 'absolute',
             marginLeft: -7,
-            height: 28,
-            width: 28,
+            height: 48,
+            width: 48,
         },
         circle: {
             borderRadius: 12,
             position: 'relative',
-            top: 8, left: 8,
+            top: 18, left: 8,
             height: 12,
             width: 12,
         },
